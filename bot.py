@@ -6,8 +6,14 @@ from ai_handler import get_ai_advice
 from database import init_db, add_product
 from clock import check_prices_periodically
 import re
+import os
+from dotenv import load_dotenv
 
-TOKEN = '8733045124:AAFcgcGHLwSJ1hF4bPzuey0ENc3JjsJIOc8'
+# Load variables from .env file
+load_dotenv()
+
+# Get the token from environment variables
+TOKEN = os.getenv('TELEGRAM_TOKEN')
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
