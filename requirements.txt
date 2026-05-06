@@ -3,3 +3,4 @@ undetected-chromedriver
 selenium
 groq
 python-dotenv
+matplotlib
