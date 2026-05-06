@@ -6,32 +6,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import re
-import cloudscraper
-from lxml import html as lxml_html
 
 _driver_init_lock = threading.Lock()
-_cloudscraper = cloudscraper.create_scraper()
-
-
-def fetch_product_title(url):
-    """Fetch product title via HTTP. Falls back to URL slug if the page is unavailable."""
-    try:
-        resp = _cloudscraper.get(url, timeout=15)
-        if resp.status_code == 200:
-            tree = lxml_html.fromstring(resp.content)
-            els = tree.xpath('//span[@id="productTitle"]')
-            if els:
-                return els[0].text_content().strip()
-    except Exception as e:
-        print(f"[!] Title fetch error: {e}")
-
-    # Fallback: derive a readable name from the URL slug
-    slug_match = re.search(r'amazon\.com/([^/]+)/dp/', url)
-    if slug_match:
-        slug = slug_match.group(1)
-        if not re.match(r'^dp$', slug):
-            return slug.replace('-', ' ').title()
-    return None
 
 
 def _set_us_delivery(driver):

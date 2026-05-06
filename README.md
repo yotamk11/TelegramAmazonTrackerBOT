@@ -78,10 +78,6 @@ Any Amazon regional URL (`.co.uk`, `.de`, etc.) is normalised to `amazon.com` by
 3. Interacts with the "Deliver to" location widget to set a US zip code (10001), forcing USD pricing server-side
 4. Navigates to the product page and validates the `$` symbol before accepting the price
 
-### Title Backfill
-
-On every startup, the bot fetches missing product titles via a lightweight HTTP request (no Chrome). If the product page returns 404, the title is derived from the URL slug.
-
 ---
 
 ## Setup

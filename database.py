@@ -58,22 +58,6 @@ def add_product(user_id, url, last_price, target_price, title=None):
     return product_id
 
 
-def get_products_without_title():
-    conn = sqlite3.connect('tracker.db')
-    cursor = conn.cursor()
-    cursor.execute('SELECT id, url FROM tracked_products WHERE title IS NULL OR title = ""')
-    rows = cursor.fetchall()
-    conn.close()
-    return rows
-
-
-def update_product_title(product_id, title):
-    conn = sqlite3.connect('tracker.db')
-    cursor = conn.cursor()
-    cursor.execute('UPDATE tracked_products SET title = ? WHERE id = ?', (title, product_id))
-    conn.commit()
-    conn.close()
-
 
 def get_all_tracked():
     conn = sqlite3.connect('tracker.db')

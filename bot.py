@@ -3,9 +3,9 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters, CallbackQueryHandler
-from scraper import fetch_amazon_price, fetch_product_title
+from scraper import fetch_amazon_price
 from ai_handler import get_ai_advice
-from database import init_db, add_product, get_user_products, get_product_by_id, get_price_history, record_price_history, get_products_without_title, update_product_title, delete_product_and_history
+from database import init_db, add_product, get_user_products, get_product_by_id, get_price_history, record_price_history, delete_product_and_history
 from graph import build_price_graph
 from clock import check_prices_periodically
 import re
@@ -78,7 +78,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if result:
             price, title = result
-            ai_analysis = await loop.run_in_executor(executor, get_ai_advice, usd_url, price)
+            ai_analysis = await loop.run_in_executor(executor, get_ai_advice, usd_url, price, title)
             context.user_data['last_url'] = usd_url
             context.user_data['temp_title'] = title
             keyboard = [[InlineKeyboardButton("🔔 Start Price Tracking", callback_data=f"track_{price}")]]
@@ -183,27 +183,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("Product not found.")
 
 
-async def backfill_titles(app):
-    """On startup, fetch titles for any tracked products that are missing one."""
-    missing = get_products_without_title()
-    if not missing:
-        return
-    print(f"[*] Backfilling titles for {len(missing)} product(s)...")
-    loop = asyncio.get_event_loop()
-    executor = app.bot_data['executor']
-    for product_id, url in missing:
-        title = await loop.run_in_executor(executor, fetch_product_title, url)
-        if title:
-            update_product_title(product_id, title)
-            print(f"[+] Title for product {product_id}: {title}")
-        else:
-            print(f"[!] Could not fetch title for product {product_id}")
-
-
 if __name__ == '__main__':
     init_db()
     executor = ThreadPoolExecutor(max_workers=5)
-    application = ApplicationBuilder().token(TOKEN).post_init(backfill_titles).build()
+    application = ApplicationBuilder().token(TOKEN).build()
     application.bot_data['executor'] = executor
 
     # Schedule periodic checks every 30 minutes
