@@ -9,10 +9,10 @@ A Telegram bot that monitors Amazon product prices, stores price history, and no
 - Track any Amazon product by sending its URL to the bot
 - Automatic price checks every 30 minutes
 - AI-powered deal analysis on each new product (Groq / LLaMA)
-- Instant Telegram notification when a product hits its target price, including the product name
+- Instant Telegram notification when a product hits its target price
 - Full price history recorded per product
 - Price history graph (lowest price per day) available on demand
-- Delete a tracked product and its full history at any time
+- Delete a tracked product and its full history
 - Handles multiple users concurrently via a thread pool
 - All prices fetched in USD regardless of the user's region
 
@@ -37,10 +37,10 @@ Sending an Amazon product URL directly starts the tracking flow.
 | File              | Responsibility                                                         |
 |-------------------|------------------------------------------------------------------------|
 | `bot.py`          | Telegram handlers, startup logic, thread pool management               |
-| `scraper.py`      | Amazon price and title scraping via undetected Chrome; lightweight title fetch via HTTP |
+| `scraper.py`      | Amazon price and title scraping via undetected Chrome |
 | `ai_handler.py`   | Groq API integration (LLaMA 3.1) for deal analysis                    |
 | `database.py`     | SQLite schema, all read/write operations                               |
-| `clock.py`        | Periodic price check job; concurrent scraping with semaphore           |
+| `clock.py`        | Periodic price check job       |
 | `graph.py`        | Matplotlib price history chart (daily lowest price)                    |
 
 ### Database Schema
