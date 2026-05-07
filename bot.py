@@ -5,7 +5,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters, CallbackQueryHandler
 from scraper import fetch_amazon_price
 from ai_handler import get_ai_advice
-from database import init_db, add_product, get_user_products, get_product_by_id, get_price_history, record_price_history, delete_product_and_history
+from database import init_db, add_product, get_user_products, get_product_by_id, get_price_history, record_price_history, delete_product_and_history, get_user_product_by_asin, update_target_price
 from graph import build_price_graph
 from clock import check_prices_periodically
 import re
@@ -49,7 +49,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handles link processing and target price inputs."""
-    # Scenario 1: User is responding with a Target Price
+    # Scenario 1: User is setting a new tracking target for a fresh product
     if context.user_data.get('waiting_for_target'):
         try:
             target_price = float(update.message.text)
@@ -72,10 +72,40 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Please send a valid number.")
             return
 
-    # Scenario 2: User sent an Amazon link
+    # Scenario 2: User is updating the target price for an already-tracked product
+    if context.user_data.get('updating_target'):
+        try:
+            new_target = float(update.message.text)
+            product_id = context.user_data.pop('updating_target')
+            update_target_price(product_id, new_target)
+            await update.message.reply_text(f"✅ Target price updated to **${new_target:.2f}**.", parse_mode='Markdown')
+            return
+        except ValueError:
+            await update.message.reply_text("❌ Please send a valid number.")
+            return
+
+    # Scenario 3: User sent an Amazon link
     user_text = update.message.text
     if is_valid_amazon_url(user_text):
         usd_url = prepare_amazon_url(user_text)
+
+        # Check if the user is already tracking this product
+        asin_match = re.search(r'/dp/([A-Z0-9]{10})', usd_url)
+        if asin_match:
+            existing = get_user_product_by_asin(update.effective_user.id, asin_match.group(1))
+            if existing:
+                prod_id, _, last_price, target_price, title = existing
+                name = title or f"Product {asin_match.group(1)}"
+                label = name[:50] + '...' if len(name) > 50 else name
+                keyboard = [[InlineKeyboardButton("🎯 Update Target Price", callback_data=f"update_target_{prod_id}")]]
+                await update.message.reply_text(
+                    f"📦 You're already tracking **{label}**\n"
+                    f"Last known price: **${last_price:.2f}** | Target: **${target_price:.2f}**",
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
+                )
+                return
+
         status_msg = await update.message.reply_text("🔍 Validating link and fetching price...")
         loop = asyncio.get_event_loop()
         executor = context.bot_data.get('executor')
@@ -177,6 +207,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             photo=graph_buf,
             caption=f"Price history — target: ${target_price:.2f}"
         )
+
+    elif query.data.startswith("update_target_"):
+        product_id = int(query.data.split("_")[2])
+        context.user_data['updating_target'] = product_id
+        await query.message.reply_text("Enter your new target price:")
 
     elif query.data.startswith("confirm_delete_"):
         product_id = int(query.data.split("_")[2])

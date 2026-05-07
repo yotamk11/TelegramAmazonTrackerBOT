@@ -72,6 +72,10 @@ def fetch_amazon_price(url):
         except:
             pass
 
+        # Scrape price
+        price = None
+        usd_fail = False
+
         # Strategy 1: combined price span
         try:
             full_price_element = driver.find_element(By.CSS_SELECTOR, "span.a-price")
@@ -79,29 +83,33 @@ def fetch_amazon_price(url):
             print(f"[+] Raw price text: {raw_text}")
             if '$' not in raw_text:
                 print(f"[-] Price not in USD (got: {raw_text})")
-                return None
-            match = re.search(r"(\d[\d,]*\.\d{2})", raw_text)
-            if match:
-                price = "{:.2f}".format(float(match.group(1).replace(',', '')))
-                return price, title
+                usd_fail = True
+            else:
+                match = re.search(r"(\d[\d,]*\.\d{2})", raw_text)
+                if match:
+                    price = "{:.2f}".format(float(match.group(1).replace(',', '')))
         except:
             pass
 
         # Strategy 2: separate whole + fraction spans
-        try:
-            price_block = driver.find_element(By.CSS_SELECTOR, "span.a-price")
-            if '$' not in price_block.get_attribute("outerHTML"):
-                print("[-] Price block does not contain USD symbol")
-                return None
-            whole = driver.find_element(By.CSS_SELECTOR, "span.a-price-whole").text.replace(',', '').strip()
-            fraction = driver.find_element(By.CSS_SELECTOR, "span.a-price-fraction").text.strip()
-            if whole and fraction:
-                price = "{:.2f}".format(float(f"{whole}.{fraction}"))
-                return price, title
-        except:
-            pass
+        if price is None and not usd_fail:
+            try:
+                price_block = driver.find_element(By.CSS_SELECTOR, "span.a-price")
+                if '$' not in price_block.get_attribute("outerHTML"):
+                    print("[-] Price block does not contain USD symbol")
+                    usd_fail = True
+                else:
+                    whole = driver.find_element(By.CSS_SELECTOR, "span.a-price-whole").text.replace(',', '').strip()
+                    fraction = driver.find_element(By.CSS_SELECTOR, "span.a-price-fraction").text.strip()
+                    if whole and fraction:
+                        price = "{:.2f}".format(float(f"{whole}.{fraction}"))
+            except:
+                pass
 
-        return None
+        if price is None:
+            return None
+
+        return price, title
 
     except Exception as e:
         print(f"[-] Scraping Error: {e}")

@@ -59,6 +59,29 @@ def add_product(user_id, url, last_price, target_price, title=None):
 
 
 
+def get_user_product_by_asin(user_id, asin):
+    conn = sqlite3.connect('tracker.db')
+    cursor = conn.cursor()
+    cursor.execute(
+        'SELECT id, url, last_price, target_price, title FROM tracked_products WHERE user_id = ? AND url LIKE ?',
+        (user_id, f'%/dp/{asin}%')
+    )
+    row = cursor.fetchone()
+    conn.close()
+    return row
+
+
+def update_target_price(product_id, new_target):
+    conn = sqlite3.connect('tracker.db')
+    cursor = conn.cursor()
+    cursor.execute(
+        'UPDATE tracked_products SET target_price = ? WHERE id = ?',
+        (float(new_target), product_id)
+    )
+    conn.commit()
+    conn.close()
+
+
 def get_all_tracked():
     conn = sqlite3.connect('tracker.db')
     cursor = conn.cursor()
