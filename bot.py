@@ -56,6 +56,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             url = context.user_data.get('last_url')
             current_price = context.user_data.get('temp_price')
 
+            if not url:
+                context.user_data['waiting_for_target'] = False
+                await update.message.reply_text("❌ Session expired. Please send the Amazon URL again.")
+                return
+
             title = context.user_data.get('temp_title')
             product_id = add_product(update.effective_user.id, url, current_price, target_price, title)
             record_price_history(product_id, current_price)
@@ -105,11 +110,12 @@ async def history_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = []
     for prod_id, url, price, target, title in products:
-        asin_match = re.search(r'/dp/([A-Z0-9]{10})', url)
+        asin_match = re.search(r'/dp/([A-Z0-9]{10})', url) if url else None
         name = title or f"Product {asin_match.group(1) if asin_match else prod_id}"
         label = name[:40] + '...' if len(name) > 40 else name
+        price_str = f"${price:.2f}" if price is not None else "?"
         keyboard.append([InlineKeyboardButton(
-            f"{label} — ${price:.2f}",
+            f"{label} — {price_str}",
             callback_data=f"graph_{prod_id}"
         )])
 
@@ -130,7 +136,7 @@ async def delete_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = []
     for prod_id, url, price, target, title in products:
-        asin_match = re.search(r'/dp/([A-Z0-9]{10})', url)
+        asin_match = re.search(r'/dp/([A-Z0-9]{10})', url) if url else None
         name = title or f"Product {asin_match.group(1) if asin_match else prod_id}"
         label = name[:40] + '...' if len(name) > 40 else name
         keyboard.append([InlineKeyboardButton(
