@@ -107,7 +107,7 @@ def get_product_by_id(product_id):
     conn = sqlite3.connect('tracker.db')
     cursor = conn.cursor()
     cursor.execute(
-        'SELECT id, url, last_price, target_price, title FROM tracked_products WHERE id = ?',
+        'SELECT id, url, last_price, target_price, title, user_id FROM tracked_products WHERE id = ?',
         (product_id,)
     )
     row = cursor.fetchone()

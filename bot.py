@@ -206,13 +206,18 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data.startswith("graph_"):
         product_id = int(query.data.split("_")[1])
         product = get_product_by_id(product_id)
+
+        if not product or product[5] != query.from_user.id:
+            await query.message.reply_text("Product not found.")
+            return
+
         history = get_price_history(product_id)
 
         if not history:
             await query.message.reply_text("No price history recorded for this product yet.")
             return
 
-        _, url, _, target_price, title = product
+        _, url, _, target_price, title, _ = product
         graph_buf = build_price_graph(title or url, history, target_price)
         await context.bot.send_photo(
             chat_id=query.message.chat_id,
@@ -222,14 +227,18 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif query.data.startswith("update_target_"):
         product_id = int(query.data.split("_")[2])
+        product = get_product_by_id(product_id)
+        if not product or product[5] != query.from_user.id:
+            await query.message.reply_text("Product not found.")
+            return
         context.user_data['updating_target'] = product_id
         await query.message.reply_text("Enter your new target price:")
 
     elif query.data.startswith("confirm_delete_"):
         product_id = int(query.data.split("_")[2])
         product = get_product_by_id(product_id)
-        if product:
-            _, _, _, _, title = product
+        if product and product[5] == query.from_user.id:
+            _, _, _, _, title, _ = product
             delete_product_and_history(product_id)
             await query.edit_message_text(f"Deleted: {title or f'Product {product_id}'}")
         else:
