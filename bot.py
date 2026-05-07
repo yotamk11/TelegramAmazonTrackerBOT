@@ -8,6 +8,7 @@ from ai_handler import get_ai_advice
 from database import init_db, add_product, get_user_products, get_product_by_id, get_price_history, record_price_history, delete_product_and_history, get_user_product_by_asin, update_target_price
 from graph import build_price_graph
 from clock import check_prices_periodically
+from predictor import predict_price_drops
 import re
 import os
 from dotenv import load_dotenv
@@ -84,8 +85,70 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Please send a valid number.")
             return
 
-    # Scenario 3: User sent an Amazon link
     user_text = update.message.text
+
+    cmd = user_text.lower().strip()
+
+    # Scenario 3: List tracked products
+    if cmd == 'products':
+        products = get_user_products(update.effective_user.id)
+        if not products:
+            await update.message.reply_text("You have no tracked products yet.")
+            return
+        keyboard = []
+        for prod_id, url, price, target, title in products:
+            asin_match = re.search(r'/dp/([A-Z0-9]{10})', url) if url else None
+            name = title or f"Product {asin_match.group(1) if asin_match else prod_id}"
+            label = name[:40] + '...' if len(name) > 40 else name
+            price_str = f"${price:.2f}" if price is not None else "?"
+            keyboard.append([InlineKeyboardButton(f"{label} — {price_str}", callback_data=f"graph_{prod_id}")])
+        await update.message.reply_text("Your tracked products:", reply_markup=InlineKeyboardMarkup(keyboard))
+        return
+
+    # Scenario 4: Delete a tracked product
+    if cmd == 'delete':
+        products = get_user_products(update.effective_user.id)
+        if not products:
+            await update.message.reply_text("You have no tracked products.")
+            return
+        keyboard = []
+        for prod_id, url, price, target, title in products:
+            asin_match = re.search(r'/dp/([A-Z0-9]{10})', url) if url else None
+            name = title or f"Product {asin_match.group(1) if asin_match else prod_id}"
+            label = name[:40] + '...' if len(name) > 40 else name
+            keyboard.append([InlineKeyboardButton(f"Delete: {label}", callback_data=f"confirm_delete_{prod_id}")])
+        await update.message.reply_text(
+            "Choose a product to stop tracking and delete its history:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+
+    # Scenario 5: User asked for price-drop predictions
+    if cmd == 'drops':
+        loop = asyncio.get_event_loop()
+        executor = context.bot_data.get('executor')
+        wait_msg = await update.message.reply_text("🔍 Analysing your products...")
+        predictions = await loop.run_in_executor(executor, predict_price_drops)
+        user_preds = predictions.get(update.effective_user.id, [])
+
+        await context.bot.delete_message(
+            chat_id=update.effective_chat.id,
+            message_id=wait_msg.message_id
+        )
+
+        if not user_preds:
+            await update.message.reply_text("📊 No price drops predicted for your products right now.")
+            return
+
+        lines = ["🤖 *Predicted Price Drops*\n"]
+        for _, title, current_price, prob in user_preds:
+            name = title or "Unknown product"
+            label = (name[:50] + '…') if len(name) > 50 else name
+            lines.append(f"📉 *{label}*\nCurrent: ${current_price:.2f} | Drop probability: {prob:.0%}\n")
+        await update.message.reply_text("\n".join(lines), parse_mode='Markdown')
+        return
+
+    # Scenario 6: User sent an Amazon link
     if is_valid_amazon_url(user_text):
         usd_url = prepare_amazon_url(user_text)
 
@@ -127,57 +190,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
     else:
         await update.message.reply_text("Please send a valid Amazon URL.")
-
-
-async def history_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Lists the user's tracked products as a numbered text list with graph buttons."""
-    user_id = update.effective_user.id
-    products = get_user_products(user_id)
-
-    if not products:
-        await update.message.reply_text("You have no tracked products yet.")
-        return
-
-    keyboard = []
-    for prod_id, url, price, target, title in products:
-        asin_match = re.search(r'/dp/([A-Z0-9]{10})', url) if url else None
-        name = title or f"Product {asin_match.group(1) if asin_match else prod_id}"
-        label = name[:40] + '...' if len(name) > 40 else name
-        price_str = f"${price:.2f}" if price is not None else "?"
-        keyboard.append([InlineKeyboardButton(
-            f"{label} — {price_str}",
-            callback_data=f"graph_{prod_id}"
-        )])
-
-    await update.message.reply_text(
-        "Your tracked products:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-
-
-async def delete_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Lists tracked products with a delete button for each."""
-    user_id = update.effective_user.id
-    products = get_user_products(user_id)
-
-    if not products:
-        await update.message.reply_text("You have no tracked products.")
-        return
-
-    keyboard = []
-    for prod_id, url, price, target, title in products:
-        asin_match = re.search(r'/dp/([A-Z0-9]{10})', url) if url else None
-        name = title or f"Product {asin_match.group(1) if asin_match else prod_id}"
-        label = name[:40] + '...' if len(name) > 40 else name
-        keyboard.append([InlineKeyboardButton(
-            f"Delete: {label}",
-            callback_data=f"confirm_delete_{prod_id}"
-        )])
-
-    await update.message.reply_text(
-        "Choose a product to stop tracking and delete its history:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
 
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -235,8 +247,6 @@ if __name__ == '__main__':
         application.job_queue.run_repeating(check_prices_periodically, interval=1800, first=10)
 
     application.add_handler(CommandHandler('start', start))
-    application.add_handler(CommandHandler('products', history_command))
-    application.add_handler(CommandHandler('delete', delete_command))
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
     application.add_handler(CallbackQueryHandler(button_callback))
 

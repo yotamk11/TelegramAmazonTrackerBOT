@@ -155,6 +155,39 @@ def record_price_history(product_id, price):
     conn.close()
 
 
+def get_all_price_history_for_training():
+    """Returns {product_id: [price, ...]} oldest-first, for all products."""
+    conn = sqlite3.connect('tracker.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT product_id, price FROM price_history ORDER BY product_id, timestamp')
+    rows = cursor.fetchall()
+    conn.close()
+    history = {}
+    for product_id, price in rows:
+        history.setdefault(product_id, []).append(price)
+    return history
+
+
+def get_all_products_with_history():
+    """Returns [(user_id, product_id, title, [prices])] for every tracked product."""
+    conn = sqlite3.connect('tracker.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT tp.user_id, tp.id, tp.title, ph.price
+        FROM tracked_products tp
+        JOIN price_history ph ON tp.id = ph.product_id
+        ORDER BY tp.id, ph.timestamp
+    ''')
+    rows = cursor.fetchall()
+    conn.close()
+    products = {}
+    for user_id, product_id, title, price in rows:
+        if product_id not in products:
+            products[product_id] = (user_id, title, [])
+        products[product_id][2].append(price)
+    return [(user_id, pid, title, prices) for pid, (user_id, title, prices) in products.items()]
+
+
 def get_price_history(product_id):
     conn = sqlite3.connect('tracker.db')
     cursor = conn.cursor()
